@@ -14,7 +14,11 @@ mod ipc_listener;
 mod ipc_queue;
 mod platform;
 
+use bytes::Bytes;
 use messages::MessageError;
+
+// Matches the same type in mozglue/misc/ProcessType.h
+pub type GeckoChildId = i32;
 
 // Re-export the platform-specific types and functions
 pub use crate::breakpad::{BreakpadChar, BreakpadData, BreakpadRawData, Pid};
@@ -24,7 +28,7 @@ pub use crate::ipc_connector::{
 };
 pub use crate::ipc_listener::{IPCListener, IPCListenerError};
 pub use crate::ipc_queue::IPCQueue;
-pub use crate::platform::ProcessHandle;
+pub use crate::platform::{PlatformError, ProcessHandle};
 
 #[cfg(target_os = "windows")]
 pub use crate::platform::server_addr;
@@ -39,11 +43,11 @@ pub use crate::platform::{
 /// characters instead on Windows.
 pub trait BreakpadString {
     /// Turn an `OsString` into a vector of bytes
-    fn serialize(&self) -> Vec<u8>;
+    fn serialize(self) -> Bytes;
 
     /// Reconstruct an `OsString` from a vector of bytes obtained by calling
     /// the `BreakpadString::serialize()` function.
-    fn deserialize(bytes: &[u8]) -> Result<OsString, MessageError>;
+    fn deserialize(bytes: Vec<u8>) -> Result<OsString, MessageError>;
 
     /// Create an OsString from a C nul-terminated string.
     ///

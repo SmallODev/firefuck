@@ -8327,14 +8327,15 @@ nsresult nsDocShell::SetupNewViewer(nsIDocumentViewer* aNewViewer,
 
   mDocumentViewer->SetNavigationTiming(mTiming);
 
-  if (NS_FAILED(mDocumentViewer->Init(widget, bounds, aWindowActor))) {
+  nsresult rv = mDocumentViewer->Init(widget, bounds, aWindowActor);
+  if (NS_FAILED(rv)) {
     nsCOMPtr<nsIDocumentViewer> viewer = mDocumentViewer;
     viewer->Close(nullptr);
     viewer->Destroy();
     mDocumentViewer = nullptr;
     SetCurrentURIInternal(nullptr);
     NS_WARNING("DocumentViewer Initialization failed");
-    return NS_ERROR_FAILURE;
+    return rv;
   }
 
   // If we have old state to copy, set the old state onto the new content
@@ -10847,6 +10848,7 @@ nsresult nsDocShell::DoURILoad(nsDocShellLoadState* aLoadState,
   }
 
   MOZ_DIAGNOSTIC_ASSERT(mInitialized, "Need to initialize before load");
+  NS_ENSURE_TRUE(VerifyDocumentViewer(), NS_ERROR_FAILURE);
 
   nsCOMPtr<nsIURILoader> uriLoader = components::URILoader::Service();
   if (NS_WARN_IF(!uriLoader)) {

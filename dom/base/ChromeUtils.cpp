@@ -1170,6 +1170,11 @@ void ChromeUtils::GetLibcConstants(const GlobalObject&,
   aConsts.mO_CREAT.Construct(O_CREAT);
   aConsts.mO_NONBLOCK.Construct(O_NONBLOCK);
   aConsts.mO_WRONLY.Construct(O_WRONLY);
+#  ifdef O_CLOEXEC
+  aConsts.mO_CLOEXEC.Construct(O_CLOEXEC);
+  // In the unlikely event of a target where O_CLOEXEC isn't defined
+  // (Solaris 10?), the property will be absent in JS.
+#  endif
 
   aConsts.mPOLLERR.Construct(POLLERR);
   aConsts.mPOLLHUP.Construct(POLLHUP);
@@ -1181,6 +1186,7 @@ void ChromeUtils::GetLibcConstants(const GlobalObject&,
 
 #  ifdef XP_LINUX
   aConsts.mPR_CAPBSET_READ.Construct(PR_CAPBSET_READ);
+  aConsts.mO_PATH.Construct(O_PATH);
 #  endif
 }
 #endif
@@ -1792,6 +1798,17 @@ void ChromeUtils::ClearResourceCache(
 void ChromeUtils::InvalidateResourceCache(GlobalObject& aGlobal,
                                           ErrorResult& aRv) {
   SharedScriptCache::Invalidate();
+}
+
+void ChromeUtils::GetCachedJavaScriptSource(
+    GlobalObject& aGlobal, const nsACString& aKey, const nsACString& aURI,
+    const nsACString& aNonce, const nsACString& aHintCharset,
+    JS::MutableHandle<JS::Value> aRetval, ErrorResult& aRv) {
+  JSContext* cx = aGlobal.Context();
+  if (!SharedScriptCache::GetCachedScriptSource(cx, aKey, aURI, aNonce,
+                                                aHintCharset, aRetval)) {
+    aRv.NoteJSContextException(aGlobal.Context());
+  }
 }
 
 void ChromeUtils::ClearBfcacheByPrincipal(GlobalObject& aGlobal,

@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, # You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import functools
 import os
 from pathlib import Path, PurePath
 
@@ -10,7 +11,6 @@ import sphinx.ext.apidoc
 import yaml
 from mozbuild.base import MozbuildObject
 from mozbuild.frontend.reader import BuildReader
-from mozbuild.util import memoize
 from mozpack.copier import FileCopier
 from mozpack.files import FileFinder
 from mozpack.manifests import InstallManifest
@@ -23,7 +23,7 @@ MAIN_DOC_PATH = Path(build.topsrcdir) / "docs"
 logger = sphinx.util.logging.getLogger(__name__)
 
 
-@memoize
+@functools.cache
 def read_build_config(docdir):
     """Read the active build config and return the relevant doc paths.
 
@@ -137,7 +137,9 @@ class _SphinxManager:
         m = InstallManifest()
 
         with open(os.path.join(MAIN_DOC_PATH, "config.yml")) as fh:
-            tree_config = yaml.safe_load(fh)["categories"]
+            config = yaml.safe_load(fh)
+            tree_config = config["categories"]
+            exclude_patterns = config.get("exclude_patterns", [])
 
         m.add_link(self.conf_py_path, "conf.py")
 
@@ -148,6 +150,11 @@ class _SphinxManager:
                     source_path = os.path.normpath(os.path.join(root, f))
                     rel_source = source_path[len(source_dir) + 1 :]
                     target = os.path.normpath(os.path.join(dest, rel_source))
+
+                    # Skip files matching exclude patterns
+                    if any(pattern in source_path for pattern in exclude_patterns):
+                        continue
+
                     m.add_link(source_path, target)
 
         copier = FileCopier()

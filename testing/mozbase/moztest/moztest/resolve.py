@@ -8,7 +8,7 @@ import pickle
 import sys
 from abc import ABCMeta, abstractmethod
 from collections import defaultdict
-from functools import lru_cache
+from functools import cache
 
 import mozpack.path as mozpath
 from manifestparser import TestManifest, combine_fields
@@ -446,8 +446,7 @@ _test_flavors = {
     "crashtest": "crashtest",
     "firefox-ui-functional": "firefox-ui-functional",
     "firefox-ui-update": "firefox-ui-update",
-    "marionette-integration": "marionette-integration",
-    "marionette-unittest": "marionette-unittest",
+    "marionette": "marionette",
     "mochitest": "mochitest-plain",
     "puppeteer": "puppeteer",
     "python": "python",
@@ -469,6 +468,8 @@ _test_subsuites = {
     ("browser-chrome", "screenshots"): "mochitest-browser-screenshots",
     ("browser-chrome", "translations"): "mochitest-browser-translations",
     ("chrome", "gpu"): "mochitest-chrome-gpu",
+    ("marionette", "integration"): "marionette-integration",
+    ("marionette", "unittest"): "marionette-unittest",
     ("mochitest", "gpu"): "mochitest-plain-gpu",
     ("mochitest", "media"): "mochitest-media",
     ("mochitest", "robocop"): "robocop",
@@ -735,7 +736,7 @@ class TestResolver(MozbuildObject):
                 self._test_dirs.add(test["dir_relpath"])
         return self._test_dirs
 
-    @lru_cache(maxsize=1024)
+    @cache
     def _get_metadata_paths(self, metadata_base, dir_path):
 
         paths = []

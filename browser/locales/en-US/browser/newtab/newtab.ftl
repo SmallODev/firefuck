@@ -58,6 +58,11 @@ newtab-topsites-url-input =
     .placeholder = Type or paste a URL
 newtab-topsites-url-validation = Valid URL required
 
+## Clear text button for the URL and image URL input fields in the Top Sites form.
+
+newtab-topsites-clear-input =
+    .aria-label = Clear text
+
 newtab-topsites-image-url-label = Custom Image URL
 newtab-topsites-use-image-link = Use a custom image…
 newtab-topsites-image-validation = Image failed to load. Try a different URL.
@@ -553,6 +558,7 @@ newtab-widget-section-maximize =
 newtab-widget-section-minimize =
     .title = Minimize widgets
     .aria-label = Collapse all widgets to compact size
+newtab-widget-section-feedback = Tell us what you think
 newtab-widget-lists-name-label-default =
     .label = Task list
 newtab-widget-lists-name-placeholder-default =
@@ -630,9 +636,10 @@ newtab-widget-message-copy = From quick reminders to daily to-dos, focus session
 
 # Strings for the default promo card
 
-newtab-promo-card-title = Support { -brand-product-name }
-newtab-promo-card-body = Our sponsors support our mission to build a better web
-newtab-promo-card-cta = Learn more
+newtab-promo-card-title-addons = Simple add-ons, big impact
+# “starter pack” means a curated set of recommended browser extensions to help users get started
+newtab-promo-card-body-addons = Try the { -brand-product-name } staff picks extension starter pack.
+newtab-promo-card-cta-addons = See our picks
 newtab-promo-card-dismiss-button =
     .title = Dismiss
     .aria-label = Dismiss

@@ -163,7 +163,6 @@
 #include "mozilla/dom/DocumentFragment.h"
 #include "mozilla/dom/DocumentInlines.h"
 #include "mozilla/dom/DocumentL10n.h"
-#include "mozilla/dom/DocumentPictureInPicture.h"
 #include "mozilla/dom/DocumentTimeline.h"
 #include "mozilla/dom/DocumentType.h"
 #include "mozilla/dom/ElementBinding.h"
@@ -8994,21 +8993,28 @@ bool IsLowercaseASCII(const nsAString& aValue) {
   return true;
 }
 
+/* https://dom.spec.whatwg.org/#dom-document-createelement */
 already_AddRefed<Element> Document::CreateElement(
     const nsAString& aTagName, const ElementCreationOptionsOrString& aOptions,
     ErrorResult& rv) {
-  // https://dom.spec.whatwg.org/#dom-document-createelement
+  // 1. If localName is not a valid element local name, then throw an
+  //    "InvalidCharacterError" DOMException.
   if (!nsContentUtils::IsValidElementLocalName(aTagName)) {
     rv.ThrowInvalidCharacterError("Invalid element name");
     return nullptr;
   }
 
+  // 2. If this is an HTML document, then set localName to localName in ASCII
+  //    lowercase.
   bool needsLowercase = IsHTMLDocument() && !IsLowercaseASCII(aTagName);
   nsAutoString lcTagName;
   if (needsLowercase) {
     nsContentUtils::ASCIIToLower(aTagName, lcTagName);
   }
 
+  // 3. Let registry and is be the result of flattening element creation
+  //    options given options and this.
+  // TODO(keithamus): Scoped Element Registries (`registry`).
   const nsString* is = nullptr;
   PseudoStyleType pseudoType = PseudoStyleType::NotPseudo;
   if (aOptions.IsElementCreationOptions()) {
@@ -9019,6 +9025,7 @@ already_AddRefed<Element> Document::CreateElement(
       is = &options.mIs.Value();
     }
 
+    // XXX: Non-standard 'pseudo' option.
     // Check 'pseudo' and throw an exception if it's not one allowed
     // with CSS_PSEUDO_ELEMENT_IS_JS_CREATED_NAC.
     if (options.mPseudo.WasPassed()) {
@@ -9033,9 +9040,14 @@ already_AddRefed<Element> Document::CreateElement(
     }
   }
 
+  // 4. Let namespace be the HTML namespace, if this is an HTML document or
+  //    this's content type is "application/xhtml+xml"; otherwise null.
+  // 5. Return the result of creating an element given this, localName,
+  //    namespace, null, is, true, and registry.
   RefPtr<Element> elem = CreateElem(needsLowercase ? lcTagName : aTagName,
                                     nullptr, mDefaultElementType, is);
 
+  // XXX: Non-standard 'pseudo' option.
   if (pseudoType != PseudoStyleType::NotPseudo) {
     elem->SetPseudoElementType(pseudoType);
   }
@@ -9043,9 +9055,13 @@ already_AddRefed<Element> Document::CreateElement(
   return elem.forget();
 }
 
+/* https://dom.spec.whatwg.org/#dom-document-createelementns */
 already_AddRefed<Element> Document::CreateElementNS(
     const nsAString& aNamespaceURI, const nsAString& aQualifiedName,
     const ElementCreationOptionsOrString& aOptions, ErrorResult& rv) {
+  // Internal createElementNS steps:
+  // 1. Let (namespace, prefix, localName) be the result of validating and
+  //    extracting namespace and qualifiedName given "element".
   RefPtr<mozilla::dom::NodeInfo> nodeInfo;
   rv = nsContentUtils::GetNodeInfoFromQName(aNamespaceURI, aQualifiedName,
                                             mNodeInfoManager, ELEMENT_NODE,
@@ -9054,6 +9070,9 @@ already_AddRefed<Element> Document::CreateElementNS(
     return nullptr;
   }
 
+  // 2. Let registry and is be the result of flattening element creation
+  //    options given options and this.
+  // TODO(keithamus): Scoped Element Registries (`registry`).
   const nsString* is = nullptr;
   if (aOptions.IsElementCreationOptions()) {
     const ElementCreationOptions& options =
@@ -9063,6 +9082,8 @@ already_AddRefed<Element> Document::CreateElementNS(
     }
   }
 
+  // 3. Return the result of creating an element given document, localName,
+  //    namespace, prefix, is, true, and registry.
   nsCOMPtr<Element> element;
   rv = NS_NewElement(getter_AddRefs(element), nodeInfo.forget(),
                      NOT_FROM_PARSER, is);
@@ -9373,11 +9394,14 @@ void Document::GetCharacterSet(nsAString& aCharacterSet) const {
   CopyASCIItoUTF16(charset, aCharacterSet);
 }
 
+/* https://dom.spec.whatwg.org/#dom-document-importnode */
 already_AddRefed<nsINode> Document::ImportNode(nsINode& aNode, bool aDeep,
                                                ErrorResult& rv) const {
   nsINode* imported = &aNode;
 
   switch (imported->NodeType()) {
+    // 1. If node is a document or shadow root, then throw a
+    //    "NotSupportedError" DOMException.
     case DOCUMENT_NODE: {
       break;
     }
@@ -9389,6 +9413,24 @@ already_AddRefed<nsINode> Document::ImportNode(nsINode& aNode, bool aDeep,
     case CDATA_SECTION_NODE:
     case COMMENT_NODE:
     case DOCUMENT_TYPE_NODE: {
+      // 2. Let subtree be false.
+      // 3. Let registry be null.
+      // 4. If options is a boolean, then set subtree to options.
+      // 5. Otherwise:
+      // 5.2. If options["customElementRegistry"] exists, then set registry to
+      // it.
+      // 5.3. If registry’s is scoped is false and registry is not this’s
+      // custom element registry, then throw a "NotSupportedError"
+      // DOMException.
+      // 5.4. If registry is null, then set registry to the result of
+      // looking up a custom element registry given this.
+      // 5.6. Return the result of cloning a node given node with document set
+      // to this, subtree set to subtree, and fallbackRegistry set to
+      // registry.
+      // todo(keithamus): ^ Scoped Return
+
+      // 6. Return the result of cloning a node given node with document set to
+      //    this, subtree set to subtree, and fallbackRegistry set to registry.
       return imported->Clone(aDeep, mNodeInfoManager, rv);
     }
     default: {
@@ -12180,13 +12222,9 @@ void Document::CloseAnyAssociatedDocumentPiPWindows() {
   }
 
   // 4,5. Close a PIP window opened by us
-  if (nsPIDOMWindowInner* inner = GetInnerWindow()) {
-    if (DocumentPictureInPicture* dpip =
-            inner->GetExtantDocumentPictureInPicture()) {
-      if (RefPtr<nsGlobalWindowInner> pipWindow = dpip->GetWindow()) {
-        pipWindow->Close();
-      }
-    }
+  if (RefPtr<nsGlobalWindowInner> pipWindow =
+          bc->GetOpenedDocumentPiPWindow()) {
+    pipWindow->Close();
   }
 }
 
@@ -15247,7 +15285,7 @@ class PendingFullscreenChangeList {
 };
 
 /* static */
-MOZ_RUNINIT LinkedList<FullscreenChange> PendingFullscreenChangeList::sList;
+constinit LinkedList<FullscreenChange> PendingFullscreenChangeList::sList;
 
 size_t Document::CountFullscreenElements() const {
   size_t count = 0;
@@ -18388,18 +18426,7 @@ static void PropagateUserGestureActivationBetweenPiP(
     // 6. Get top-level navigable's last opened PiP window
     // this means activation in a cross-origin subframe in the opener will
     // cause the PIP window to get activation.
-    nsPIDOMWindowOuter* outer = currentBC->Top()->GetDOMWindow();
-    if (!outer) {
-      // We don't warn on failure due to the frequency. See bug 2008394.
-      return;
-    }
-    nsPIDOMWindowInner* inner = outer->GetCurrentInnerWindow();
-    NS_ENSURE_TRUE_VOID(inner);
-    DocumentPictureInPicture* dpip = inner->GetExtantDocumentPictureInPicture();
-    if (!dpip) {
-      return;
-    }
-    nsGlobalWindowInner* pip = dpip->GetWindow();
+    nsGlobalWindowInner* pip = currentBC->Top()->GetOpenedDocumentPiPWindow();
     if (!pip) {
       return;
     }

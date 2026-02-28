@@ -1316,6 +1316,24 @@ nsresult nsFrameLoader::SwapWithOtherRemoteLoader(
     evict(aOther);
   }
 
+  // Update Document PiP flags/counts for swapped BCs
+  const bool ourControlsPiP = ourBc->GetControlsDocumentPiP();
+  const bool otherControlsPiP = otherBc->GetControlsDocumentPiP();
+  if (ourControlsPiP != otherControlsPiP) {
+    CanonicalBrowsingContext* ourChromeBc =
+        ourBc->Canonical()->TopCrossChromeBoundary();
+    CanonicalBrowsingContext* otherChromeBc =
+        otherBc->Canonical()->TopCrossChromeBoundary();
+
+    if (ourControlsPiP) {
+      otherChromeBc->IncrementDocumentPiPWindowCount();
+      ourChromeBc->DecrementDocumentPiPWindowCount();
+    } else {
+      ourChromeBc->IncrementDocumentPiPWindowCount();
+      otherChromeBc->DecrementDocumentPiPWindowCount();
+    }
+  }
+
   SetOwnerContent(otherContent);
   aOther->SetOwnerContent(ourContent);
 
@@ -2229,12 +2247,8 @@ nsresult nsFrameLoader::MaybeCreateDocShell() {
   // Tell the window about the frame that hosts it.
   nsCOMPtr<nsPIDOMWindowOuter> newWindow = docShell->GetWindow();
   if (NS_WARN_IF(!newWindow)) {
-    // Do not call Destroy() here. See bug 472312.
     NS_WARNING("Something wrong when creating the docshell for a frameloader!");
-    // The docshell isn't completely initialized. Clear it so that it isn't
-    // reachable. Future calls to MaybeCreateDocShell will fail due to
-    // mInitialized.
-    mDocShell = nullptr;
+    Destroy();
     return NS_ERROR_FAILURE;
   }
 
@@ -2302,8 +2316,8 @@ nsresult nsFrameLoader::MaybeCreateDocShell() {
   openWindowInfo->mCoepToInheritForAboutBlank = doc->GetEmbedderPolicy();
   openWindowInfo->mBaseUriToInheritForAboutBlank = mOwnerContent->GetBaseURI();
   if (NS_FAILED(docShell->Initialize(openWindowInfo, nullptr))) {
-    // Do not call Destroy() here. See bug 472312.
     NS_WARNING("Something wrong when creating the docshell for a frameloader!");
+    Destroy();
     return NS_ERROR_FAILURE;
   }
 
@@ -2322,7 +2336,7 @@ nsresult nsFrameLoader::MaybeCreateDocShell() {
   }
 
   if (mDestroyCalled) {
-    // Docshell creation can run script,see bug 2007774.
+    // Docshell creation can run script, see bug 2007774.
     // Callers might expect there to be a document etc. if we return OK.
     return nsresult::NS_ERROR_DOCSHELL_DYING;
   }

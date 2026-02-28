@@ -45,7 +45,6 @@ import android.os.Debug;
 import android.os.LocaleList;
 import android.os.Looper;
 import android.os.PowerManager;
-import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
@@ -935,52 +934,8 @@ public class GeckoAppShell {
     return display != null && display.isHdr();
   }
 
-  @WrapForJNI(calledFrom = "gecko")
-  private static void performHapticFeedback(final boolean aIsLongPress) {
-    // Don't perform haptic feedback if a vibration is currently playing,
-    // because the haptic feedback will nuke the vibration.
-    if (System.nanoTime() >= sVibrationEndTime) {
-      final VibrationEffect effect;
-      if (Build.VERSION.SDK_INT >= 29) {
-        // API level 29 introduces pre-defined vibration effects for better
-        // haptic feedback, prefer to use them.
-        if (aIsLongPress) {
-          effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK);
-        } else {
-          effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK);
-        }
-      } else {
-        if (aIsLongPress) {
-          effect = VibrationEffect.createWaveform(new long[] {0, 1, 20, 21}, -1);
-        } else {
-          effect = VibrationEffect.createWaveform(new long[] {0, 10, 20, 30}, -1);
-        }
-      }
-      vibrateOnHapticFeedbackEnabled(effect);
-    }
-  }
-
   private static Vibrator vibrator() {
     return (Vibrator) getApplicationContext().getSystemService(Context.VIBRATOR_SERVICE);
-  }
-
-  // Vibrate only if haptic feedback is enabled.
-  @SuppressLint("MissingPermission")
-  private static void vibrateOnHapticFeedbackEnabled(final VibrationEffect effect) {
-    if (Settings.System.getInt(
-            getApplicationContext().getContentResolver(),
-            Settings.System.HAPTIC_FEEDBACK_ENABLED,
-            0)
-        > 0) {
-      // Here, sVibrationEndTime is not set. Compared to other kinds of
-      // vibration, haptic feedbacks are usually shorter and less important,
-      // which means it's ok to "nuke" them.
-      try {
-        vibrator().vibrate(effect);
-      } catch (final SecurityException ignore) {
-        Log.w(LOGTAG, "No VIBRATE permission");
-      }
-    }
   }
 
   @SuppressLint("MissingPermission")
@@ -1656,6 +1611,22 @@ public class GeckoAppShell {
 
   /** The display id that is associated with the GeckoView object. */
   private static volatile int sDisplayId = Display.DEFAULT_DISPLAY;
+
+  /** Initialize screen information. This should be called at startup */
+  public static void maybeInitScreen() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+      return;
+    }
+
+    ThreadUtils.postToBackgroundThread(
+        new Runnable() {
+          @Override
+          public void run() {
+            // Since creating window context is expensive, we initialize it at startup.
+            sScreenCompat.getDisplay(sDisplayId);
+          }
+        });
+  }
 
   /* package */ static Rect getScreenSizeIgnoreOverride() {
     return sScreenCompat.getScreenSize(sDisplayId);

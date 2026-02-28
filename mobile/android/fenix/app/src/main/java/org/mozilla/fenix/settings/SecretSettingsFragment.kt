@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Bundle
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.NavDirections
+import androidx.navigation.findNavController
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.preference.EditTextPreference
@@ -16,9 +18,6 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import mozilla.components.support.remotesettings.RemoteSettingsServer
-import mozilla.components.support.remotesettings.RemoteSettingsServerConfig
-import mozilla.components.support.remotesettings.into
 import org.mozilla.fenix.BuildConfig
 import org.mozilla.fenix.Config
 import org.mozilla.fenix.FeatureFlags
@@ -58,6 +57,9 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
         args.preferenceToScrollTo?.let {
             scrollToPreference(it)
         }
+
+        requirePreference<Preference>(R.string.pref_key_remote_settings_server).summary =
+            requireContext().settings().getRemoteSettingsServerString()
     }
 
     @Suppress("LongMethod", "CyclomaticComplexMethod", "CognitiveComplexMethod")
@@ -196,37 +198,8 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
             }
         }
 
-        requirePreference<SwitchPreference>(R.string.pref_key_search_optimization_feature).apply {
+        requirePreference<Preference>(R.string.pref_key_search_optimization).apply {
             isVisible = Config.channel.isDebug
-            isChecked = context.settings().isSearchOptimizationEnabled
-            onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, newValue ->
-                (newValue as? Boolean)?.let { newOption ->
-                    context.settings().isSearchOptimizationEnabled = newOption
-                    requirePreference<SwitchPreference>(R.string.pref_key_search_optimization_stocks).apply {
-                        isEnabled = newOption
-                        summary = when (newOption) {
-                            true -> null
-                            false -> getString(R.string.preferences_debug_settings_search_optimization_stock_summary)
-                        }
-                        if (!newOption && isChecked) {
-                            isChecked = false
-                            context.settings().shouldShowSearchOptimizationStockCard = false
-                        }
-                    }
-                }
-                true
-            }
-        }
-
-        requirePreference<SwitchPreference>(R.string.pref_key_search_optimization_stocks).apply {
-            isVisible = Config.channel.isDebug
-            isEnabled = context.settings().isSearchOptimizationEnabled
-            isChecked = context.settings().shouldShowSearchOptimizationStockCard
-            summary = when (context.settings().isSearchOptimizationEnabled) {
-                true -> null
-                false -> getString(R.string.preferences_debug_settings_search_optimization_stock_summary)
-            }
-            onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 
         requirePreference<SwitchPreference>(R.string.pref_key_use_minimal_bottom_toolbar_while_entering_text).apply {
@@ -404,26 +377,9 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
             isVisible = Config.channel.isNightlyOrDebug && BuildConfig.GLEAN_CUSTOM_URL.isNullOrEmpty()
         }
 
-        requirePreference<SwitchPreference>(R.string.pref_key_remote_server_prod).apply {
+        requirePreference<Preference>(R.string.pref_key_remote_settings_server).apply {
             isVisible = true
-            isChecked = context.settings().useProductionRemoteSettingsServer
-            onPreferenceChangeListener = object : SharedPreferenceUpdater() {
-                override fun onPreferenceChange(preference: Preference, newValue: Any?): Boolean {
-                    val service =
-                        context.components.remoteSettingsService.value.remoteSettingsService
-                    service.updateConfig(
-                        RemoteSettingsServerConfig(
-                            server = if (newValue as? Boolean == true) {
-                                RemoteSettingsServer.Prod.into()
-                            } else {
-                                RemoteSettingsServer.Stage.into()
-                            },
-                        ).into(),
-                    )
-                    service.sync()
-                    return super.onPreferenceChange(preference, newValue)
-                }
-            }
+            summary = context.settings().getRemoteSettingsServerString()
         }
 
         requirePreference<SwitchPreference>(R.string.pref_key_use_remote_search_configuration).apply {
@@ -501,12 +457,6 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
             onPreferenceChangeListener = SharedPreferenceUpdater()
         }
 
-        requirePreference<SwitchPreference>(R.string.pref_key_enable_email_masks).apply {
-            isVisible = Config.channel.isDebug
-            isChecked = context.settings().isEmailMaskFeatureEnabled
-            onPreferenceChangeListener = SharedPreferenceUpdater()
-        }
-
         requirePreference<SwitchPreference>(R.string.pref_key_enable_persistent_onboarding).apply {
             isChecked = context.settings().enablePersistentOnboarding
             onPreferenceChangeListener = SharedPreferenceUpdater()
@@ -530,6 +480,28 @@ class SecretSettingsFragment : PreferenceFragmentCompat() {
 
         if (!handled) {
             super.onDisplayPreferenceDialog(preference)
+        }
+    }
+
+    override fun onPreferenceTreeClick(preference: Preference): Boolean {
+        val directions = when (preference.key) {
+            resources.getString(R.string.pref_key_remote_settings_server) -> {
+                SecretSettingsFragmentDirections.actionSecretSettingsFragmentToRemoteSettingsServerFragment()
+            }
+            resources.getString(R.string.pref_key_search_optimization) -> {
+                SecretSettingsFragmentDirections.actionSecretSettingsFragmentToSearchOptimizationFragment()
+            }
+            else -> return super.onPreferenceTreeClick(preference)
+        }
+        navigateFromSecretSettings(directions)
+        return true
+    }
+
+    private fun navigateFromSecretSettings(directions: NavDirections) {
+        view?.findNavController()?.let { navController ->
+            if (navController.currentDestination?.id == R.id.secretSettingsPreference) {
+                navController.navigate(directions)
+            }
         }
     }
 }

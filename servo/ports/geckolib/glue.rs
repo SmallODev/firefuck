@@ -1544,29 +1544,22 @@ unsafe fn borrow_assert_main_thread<T>(cell: &atomic_refcell::AtomicRefCell<T>) 
 pub extern "C" fn Servo_Element_IsDisplayNone(element: &RawGeckoElement) -> bool {
     let element = GeckoElement(element);
     let data = element
-        .get_data()
-        .expect("Invoking Servo_Element_IsDisplayNone on unstyled element");
-
-    let is_display_none = unsafe { borrow_assert_main_thread(data) }
-        .styles
-        .is_display_none();
-    is_display_none
+        .borrow_data()
+        .expect("Invoking Servo_Element_IsDisplayContents on unstyled element");
+    data.styles.is_display_none()
 }
 
 #[no_mangle]
 pub extern "C" fn Servo_Element_IsDisplayContents(element: &RawGeckoElement) -> bool {
     let element = GeckoElement(element);
     let data = element
-        .get_data()
+        .borrow_data()
         .expect("Invoking Servo_Element_IsDisplayContents on unstyled element");
-
-    let is_display_contents = unsafe { borrow_assert_main_thread(data) }
-        .styles
+    data.styles
         .primary()
         .get_box()
         .clone_display()
-        .is_contents();
-    is_display_contents
+        .is_contents()
 }
 
 #[no_mangle]
@@ -1603,7 +1596,7 @@ pub extern "C" fn Servo_Element_ReferencesAttribute(
         return false;
     };
 
-    unsafe { Atom::with(attr, |attr| attrs.contains(AtomIdent::cast(attr))) }
+    unsafe { Atom::with(attr, |attr| attrs.contains_key(AtomIdent::cast(attr))) }
 }
 
 fn mode_to_origin(mode: SheetParsingMode) -> Origin {
@@ -10117,7 +10110,7 @@ pub extern "C" fn Servo_RegisterCustomProperty(
             let parsed = Parser::new(&mut input)
                 .parse_entirely(|input| {
                     input.skip_whitespace();
-                    SpecifiedValue::parse(input, url_data).map(Arc::new)
+                    SpecifiedValue::parse(input, None, url_data).map(Arc::new)
                 })
                 .ok();
             if parsed.is_none() {
@@ -10300,6 +10293,7 @@ pub unsafe extern "C" fn Servo_Value_Matches_Syntax(
         &mut input,
         &syntax,
         url_data,
+        None,
         AllowComputationallyDependent::Yes,
     )
     .is_ok()

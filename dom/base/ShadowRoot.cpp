@@ -56,6 +56,7 @@ NS_INTERFACE_MAP_END_INHERITING(DocumentFragment)
 NS_IMPL_ADDREF_INHERITED(ShadowRoot, DocumentFragment)
 NS_IMPL_RELEASE_INHERITED(ShadowRoot, DocumentFragment)
 
+/* Part of https://dom.spec.whatwg.org/#concept-attach-a-shadow-root step 5 */
 ShadowRoot::ShadowRoot(Element* aElement, ShadowRootMode aMode,
                        Element::DelegatesFocus aDelegatesFocus,
                        SlotAssignmentMode aSlotAssignment,
@@ -70,41 +71,28 @@ ShadowRoot::ShadowRoot(Element* aElement, ShadowRootMode aMode,
 
   SetHost(aElement);
 
-  // Nodes in a shadow tree should never store a value
-  // in the subtree root pointer, nodes in the shadow tree
-  // track the subtree root using GetContainingShadow().
-  ClearSubtreeRootPointer();
-
   uint32_t flags = NODE_IS_IN_SHADOW_TREE;
-
   if (aMode == ShadowRootMode::Closed) {
     flags |= SHADOW_ROOT_MODE_CLOSED;
   }
-
   if (aDelegatesFocus == Element::DelegatesFocus::Yes) {
     flags |= SHADOW_ROOT_DELEGATES_FOCUS;
   }
-
   if (aSlotAssignment == SlotAssignmentMode::Manual) {
     flags |= SHADOW_ROOT_SLOT_ASSIGNMENT_MANUAL;
   }
-
   if (aElement->IsHTMLElement(nsGkAtoms::details)) {
     flags |= SHADOW_ROOT_IS_DETAILS_SHADOW_TREE;
   }
-
   if (aDeclarative == Declarative::Yes) {
     flags |= SHADOW_ROOT_IS_DECLARATIVE;
   }
-
   if (aIsClonable == IsClonable::Yes) {
     flags |= SHADOW_ROOT_IS_CLONABLE;
   }
-
   if (aIsSerializable == IsSerializable::Yes) {
     flags |= SHADOW_ROOT_IS_SERIALIZABLE;
   }
-
   SetFlags(flags);
   if (Host()->IsInNativeAnonymousSubtree()) {
     // NOTE(emilio): We could consider just propagating the
@@ -118,21 +106,13 @@ ShadowRoot::ShadowRoot(Element* aElement, ShadowRootMode aMode,
     SetIsNativeAnonymousRoot();
   }
   Bind();
-
-  ExtendedDOMSlots()->mContainingShadow = this;
 }
 
 ShadowRoot::~ShadowRoot() {
   if (IsInComposedDoc()) {
     OwnerDoc()->RemoveComposedDocShadowRoot(*this);
   }
-
   MOZ_DIAGNOSTIC_ASSERT(!OwnerDoc()->IsComposedDocShadowRoot(*this));
-
-  UnsetFlags(NODE_IS_IN_SHADOW_TREE);
-
-  // nsINode destructor expects mSubtreeRoot == this.
-  SetSubtreeRootPointer(this);
 }
 
 MOZ_DEFINE_MALLOC_SIZE_OF(ShadowRootAuthorStylesMallocSizeOf)
@@ -922,6 +902,7 @@ void ShadowRoot::SetHTML(const nsAString& aHTML, const SetHTMLOptions& aOptions,
   nsContentUtils::SetHTML(this, host, aHTML, aOptions, aError);
 }
 
+/* https://html.spec.whatwg.org/#dom-shadowroot-sethtmlunsafe */
 void ShadowRoot::SetHTMLUnsafe(const TrustedHTMLOrString& aHTML,
                                const SetHTMLUnsafeOptions& aOptions,
                                nsIPrincipal* aSubjectPrincipal,

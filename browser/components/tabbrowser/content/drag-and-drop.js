@@ -130,6 +130,15 @@
         }
         this.finishMoveTogetherSelectedTabs(draggedTab);
         this._updateTabStylesOnDrag(draggedTab, dropEffect);
+        // Collapsing the tab group needs to occur after the non dragged tab widths
+        // have had their maxWidth to their current width by _updateTabStylesOnDrag.
+        // This is to avoid the dragged tab label container being positioned incorrectly.
+        if (
+          draggedTab._dragData.expandGroupOnDrop &&
+          !draggedTab.group.collapsed
+        ) {
+          draggedTab.group.collapsed = true;
+        }
 
         if (dropEffect == "move") {
           this.#setMovingTabMode(true);
@@ -381,7 +390,7 @@
           this._dragToPinPromoCard,
         ];
         let shouldPin =
-          isTab(draggedTab) &&
+          movingTabs.some(t => isTab(t)) &&
           !draggedTab.pinned &&
           (overPinnedDropIndicator ||
             dragToPinTargets.some(el => el.contains(event.target)));
@@ -438,7 +447,7 @@
 
         if (shouldPin || shouldUnpin) {
           for (let item of movingTabs) {
-            if (shouldPin) {
+            if (shouldPin && isTab(item)) {
               gBrowser.pinTab(item, {
                 telemetrySource:
                   gBrowser.TabMetrics.METRIC_SOURCE.DRAG_AND_DROP,
@@ -525,18 +534,32 @@
         let newIndex = dropIndex;
         let selectedTab;
         let indexForSelectedTab;
+        let unpinnedSplitViews = [];
         for (let i = 0; i < movingTabs.length; ++i) {
           const tab = movingTabs[i];
           if (tab.selected) {
             selectedTab = tab;
             indexForSelectedTab = newIndex;
-          } else {
-            const newTab = isSplitViewWrapper(tab)
-              ? gBrowser.adoptSplitView(tab, { elementIndex: newIndex })
-              : gBrowser.adoptTab(tab, {
-                  elementIndex: newIndex,
-                  selectTab: tab == draggedTab,
-                });
+          } else if (isSplitViewWrapper(tab)) {
+            const droppedIntoPinnedArea = dropIndex < gBrowser.pinnedTabCount;
+            const newSplitView = gBrowser.adoptSplitView(tab, {
+              elementIndex: droppedIntoPinnedArea
+                ? gBrowser.pinnedTabCount
+                : newIndex,
+              selectTab: true,
+            });
+            if (newSplitView) {
+              if (droppedIntoPinnedArea) {
+                unpinnedSplitViews.push(newSplitView);
+              } else {
+                ++newIndex;
+              }
+            }
+          } else if (isTab(tab)) {
+            const newTab = gBrowser.adoptTab(tab, {
+              elementIndex: newIndex,
+              selectTab: tab == draggedTab,
+            });
             if (newTab) {
               ++newIndex;
             }
@@ -552,11 +575,36 @@
           }
         }
 
-        // Restore tab selection
-        gBrowser.addRangeToMultiSelectedTabs(
-          this._tabbrowserTabs.dragAndDropElements[dropIndex],
-          this._tabbrowserTabs.dragAndDropElements[newIndex - 1]
-        );
+        if (movingTabs.length > 1) {
+          // Restore tab selection
+          let firstElement =
+            this._tabbrowserTabs.dragAndDropElements[dropIndex];
+          let firstTab = isSplitViewWrapper(firstElement)
+            ? firstElement.tabs.at(0)
+            : firstElement;
+          let lastElement =
+            this._tabbrowserTabs.dragAndDropElements[newIndex - 1];
+          let lastTab = isSplitViewWrapper(lastElement)
+            ? lastElement.tabs.at(-1)
+            : lastElement;
+          if (
+            !(isSplitViewWrapper(firstElement) && firstElement == lastElement)
+          ) {
+            gBrowser.addRangeToMultiSelectedTabs(firstTab, lastTab);
+          }
+          if (unpinnedSplitViews.length) {
+            let firstUnpinnedSplitView =
+              this._tabbrowserTabs.dragAndDropElements[gBrowser.pinnedTabCount];
+            let lastUnpinnedSplitView =
+              this._tabbrowserTabs.dragAndDropElements[
+                gBrowser.pinnedTabCount + unpinnedSplitViews.length - 1
+              ];
+            gBrowser.addRangeToMultiSelectedTabs(
+              firstUnpinnedSplitView.tabs.at(0),
+              lastUnpinnedSplitView.tabs.at(-1)
+            );
+          }
+        }
       } else {
         // Pass true to disallow dropping javascript: or data: urls
         let links;
@@ -1219,10 +1267,6 @@
           this._moveTogetherSelectedTabs(tab);
         } else if (isTabGroupLabel(tab)) {
           this._setIsDraggingTabGroup(tab.group, true);
-
-          if (collapseTabGroupDuringDrag) {
-            tab.group.collapsed = true;
-          }
         }
       }
 

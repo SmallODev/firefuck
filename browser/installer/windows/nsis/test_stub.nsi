@@ -113,6 +113,12 @@ Var MockParameters
 !macroend
 !define /redef GetParameters "!insertmacro MockGetParameters"
 
+Var MockLocalAppDataFolder
+!macro MockGetLocalAppDataFolder dir
+  StrCpy ${dir} $MockLocalAppDataFolder
+!macroend
+!define GetLocalAppDataFolder "!insertmacro MockGetLocalAppDataFolder"
+
 !include stub.nsh
 !include get_installation_type.nsh
 
@@ -149,6 +155,12 @@ Function .onInit
     ${UnitTest} TestGetInstallationTypeStub_UTF16
     ${UnitTest} TestGetInstallationTypeFull_UTF16
     ${UnitTest} TestGetInstallationTypeOther_UTF16
+
+    ${UnitTest} TestGetHadOldInstallFailure
+    ${UnitTest} TestGetHadOldInstallSuccess
+
+    ${UnitTest} TestGetHadExistingProfileFailure
+    ${UnitTest} TestGetHadExistingProfileSuccess
 
     ${UnitTest} TestIsInstallerLaunchedByDesktopLauncherNoParameter
     ${UnitTest} TestIsInstallerLaunchedByDesktopLauncherUnknownParameter
@@ -568,6 +580,46 @@ FunctionEnd
 !macroend
 !insertmacro GetInstallationTypeTests FileWrite ACP
 !insertmacro GetInstallationTypeTests FileWriteUTF16LE UTF16
+
+Function TestGetHadOldInstallFailure
+  StrCpy $PreviousInstallDir ""
+  Call GetHadOldInstall
+  Pop $0
+  ${AssertEqual} 0 "0"
+FunctionEnd
+
+Function TestGetHadOldInstallSuccess
+  StrCpy $PreviousInstallDir "foo"
+  Call GetHadOldInstall
+  Pop $0
+  ${AssertEqual} 0 "1"
+FunctionEnd
+
+Function TestGetHadExistingProfileFailure
+  GetTempFileName $0
+  Delete $0
+  CreateDirectory $0
+  StrCpy $MockLocalAppDataFolder $0
+
+  Call GetHadExistingProfile
+  Pop $0
+  ${AssertEqual} 0 "0"
+
+  RMDir $MockLocalAppDataFolder
+FunctionEnd
+
+Function TestGetHadExistingProfileSuccess
+  GetTempFileName $0
+  Delete $0
+  CreateDirectory "$0\Mozilla\Firefox"
+  StrCpy $MockLocalAppDataFolder $0
+
+  Call GetHadExistingProfile
+  Pop $0
+  ${AssertEqual} 0 "1"
+
+  RMDir /r $MockLocalAppDataFolder
+FunctionEnd
 
 Function TestIsInstallerLaunchedByDesktopLauncherNoParameter
   StrCpy $MockParameters ""
