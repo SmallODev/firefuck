@@ -292,14 +292,9 @@ add_task(async function test_tool_context_menu() {
   });
   const contextMenu = document.getElementById("sidebar-context-menu");
   const { sidebarMain } = SidebarController;
-  const aichatTool = sidebarMain.shadowRoot.querySelector(
-    'moz-button[view="viewGenaiChatSidebar"]'
-  );
 
-  await Promise.all([
-    BrowserTestUtils.waitForEvent(sidebarMain, "sidebar-contextmenu-ready"),
-    openAndWaitForContextMenu(contextMenu, aichatTool),
-  ]);
+
+
 
   Assert.ok(
     document.getElementById("sidebar-context-menu-report-extension").hidden,

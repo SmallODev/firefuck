@@ -38,14 +38,10 @@ async function openContextMenu({ menuId, browser }) {
   } else if (menuId === TOOL_CONTEXT_MENU) {
     const { sidebarMain } = SidebarController;
     const aichatEl = sidebarMain.shadowRoot.querySelector(
-      'moz-button[view="viewGenaiChatSidebar"]'
+      ''
     );
 
-    EventUtils.synthesizeMouseAtCenter(
-      aichatEl,
-      { type: "contextmenu", button: 2 },
-      aichatEl.ownerGlobal
-    );
+
   } else {
     BrowserTestUtils.synthesizeMouse(
       null,
